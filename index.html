@@ -638,6 +638,20 @@
     <div class="link"><a onclick="go('site')">← Back to home</a></div>
   </div>
 
+  <div class="view" id="v-logincode">
+    <div class="su-card">
+      <div class="su-head"><div class="alogo">PANTHER<span>DATA</span></div><h2>Enter sign-in code</h2><p>We sent a 6-digit code to your email. It expires in 15 minutes.</p></div>
+      <div class="su-body">
+        <div class="amber-notice" id="lc-err"></div>
+        <div class="field"><label>6-digit code</label><input id="lc-code" inputmode="numeric" maxlength="6" placeholder="6-digit code" style="text-align:center;font-size:1.3rem;letter-spacing:.4em"></div>
+        <button class="btn" id="lc-btn" onclick="doLoginCode()">Verify &amp; Sign In</button>
+        <div class="link"><a onclick="resendLoginCode()">Resend code</a></div>
+        <div class="link"><a onclick="show('v-signin')">Back to sign in</a></div>
+      </div>
+    </div>
+    <div class="link"><a onclick="go('site')">← Back to home</a></div>
+  </div>
+
   <div class="view" id="v-forgot">
     <div class="app-head"><div class="alogo">PANTHER<span>DATA</span></div><button class="back" onclick="go('site')">Home</button></div>
     <h2 style="margin:14px 0 4px">Reset password</h2>
@@ -661,7 +675,7 @@
     <div class="field"><label>Verification code</label><input id="vf-code" inputmode="numeric" maxlength="6" placeholder="6-digit code" style="text-align:center;font-size:1.3rem;letter-spacing:.4em"></div>
     <div class="err" id="vf-err"></div>
     <button class="btn" onclick="doVerify()">Verify & Open Account</button>
-    <div class="link">Didn't get it? <a onclick="doResend()">Resend code</a></div>
+    <div class="link">Didn't get it? <a id="vf-resend" onclick="doResend()">Resend code</a></div>
   </div>
 
   <div class="view" id="v-dash">
@@ -746,7 +760,8 @@
       <div class="field"><label>Smartcard / IUC Number</label><input id="cab-iuc" inputmode="numeric" placeholder="e.g. 1023456789"></div>
     </div>
     <div class="err" id="cab-err"></div>
-    <button class="paybtn" onclick="buyCable()">Continue →</button>
+    <div id="cab-verified" class="okcard" style="display:none">Verified customer<br><b id="cab-verified-name"></b><br><small>Tap Continue again to confirm.</small></div>
+    <button class="paybtn" id="cab-pay-btn" onclick="buyCable()">Continue →</button>
   </div>
 
   <div class="view" id="v-power">
@@ -760,7 +775,7 @@
       <div class="field" style="margin-top:12px"><label>Amount (₦)</label><input id="pow-amt" inputmode="numeric" placeholder="e.g. 2000"></div>
     </div>
     <div class="err" id="pow-err"></div>
-    <button class="paybtn" onclick="buyPower()">Continue →</button>
+    <button class="paybtn" id="pow-pay-btn" onclick="buyPower()">Continue →</button>
   </div>
 
   <div class="view" id="v-fund">
@@ -835,10 +850,13 @@
     <div class="tx"><div class="t-ic">📧</div><div class="t-main"><b>Email</b><small id="prof-email">—</small></div></div>
     <div class="tx"><div class="t-ic">💰</div><div class="t-main"><b>Wallet balance</b><small id="prof-bal">—</small></div></div>
     <div class="tx"><div class="t-ic">🔐</div><div class="t-main"><b>Transaction PIN</b><small>Required before every purchase</small></div></div>
+    <div class="tx"><div class="t-ic">✉️</div><div class="t-main"><b>Sign-in code by email</b><small id="prof-2fa-sub">Off — sign in with password only</small></div></div>
+    <div class="err" id="tfa-err"></div>
+    <button class="btn ghost" id="tfa-btn" onclick="toggleLogin2fa()">Turn On Sign-in Code</button>
     <div class="field"><label>Old PIN</label><input id="cp-old" type="password" inputmode="numeric" maxlength="4" placeholder="••••"></div>
     <div class="field"><label>New PIN</label><input id="cp-new" type="password" inputmode="numeric" maxlength="4" placeholder="••••"></div>
     <div class="err" id="cp-err"></div>
-    <button class="btn ghost" onclick="doChangePin()">Change PIN</button>
+    <button class="btn ghost" id="cp-btn" onclick="doChangePin()">Change PIN</button>
     <button class="btn ghost" style="margin-top:20px" onclick="doLogout()">Log Out</button>
   </div>
 
@@ -1441,6 +1459,7 @@ function toggleSiPw(btn){
   if(inp.type==='password'){ inp.type='text'; btn.textContent='🙈'; }
   else { inp.type='password'; btn.textContent='👁️'; }
 }
+let pendingLoginUid = 0;
 async function doSignin(){
   const user=$('si-user').value.trim(), pass=$('si-pass').value;
   const notice=$('si-err'), btn=$('si-btn');
@@ -1456,6 +1475,11 @@ async function doSignin(){
       if(j.verify_required){ startVerify(j.user_id, null, true); return; }
       return showErr(j.error);
     }
+    if(j.login_2fa_required){
+      pendingLoginUid = j.user_id; $('lc-code').value='';
+      const lc=$('lc-err'); if(lc){ lc.textContent = j.email_sent ? '' : 'We could not send the code. Tap Resend code.'; lc.style.display = j.email_sent ? 'none' : 'block'; }
+      show('v-logincode'); return;
+    }
     saveToken(j.token); ME=j.user;
     show('v-dash');
   }catch(e){
@@ -1463,35 +1487,77 @@ async function doSignin(){
     showErr(e.message);
   }
 }
+async function doLoginCode(){
+  const code=$('lc-code').value.trim(), notice=$('lc-err'), btn=$('lc-btn');
+  const showErr=(m)=>{ notice.textContent=m; notice.style.display=m?'block':'none'; };
+  if(!/^\d{6}$/.test(code)) return showErr('Enter the 6-digit code from your email.');
+  showErr(''); btn.disabled=true; btn.innerHTML='<span class="btn-spin"></span>';
+  try{
+    const j = await api('/api/verify-login-code','POST',{user_id:pendingLoginUid, code});
+    btn.disabled=false; btn.textContent='Verify & Sign In';
+    if(!j.ok) return showErr(j.error);
+    saveToken(j.token); ME=j.user; pendingLoginUid=0;
+    show('v-dash');
+  }catch(e){
+    btn.disabled=false; btn.textContent='Verify & Sign In';
+    showErr(e.message);
+  }
+}
+async function resendLoginCode(){
+  const notice=$('lc-err');
+  try{
+    const j = await api('/api/resend-login-code','POST',{user_id:pendingLoginUid});
+    notice.textContent = !j.ok ? j.error : (j.email_sent ? 'A new code was sent to your email.' : 'Could not send the code. Try again.');
+    notice.style.display='block';
+  }catch(e){
+    notice.textContent=e.message; notice.style.display='block';
+  }
+}
+async function toggleLogin2fa(){
+  const btn=$('tfa-btn'), err=$('tfa-err');
+  if(!ME) return;
+  const wantOn = !ME.login_2fa;
+  err.textContent=''; btn.disabled=true;
+  try{
+    const j = await api('/api/login-2fa','POST',{enabled:wantOn});
+    btn.disabled=false;
+    if(!j.ok){ err.textContent=j.error; return; }
+    ME.login_2fa = j.login_2fa ? 1 : 0;
+    renderProfile();
+    if(!j.email_sent) err.textContent='Turned ' + (wantOn ? 'on' : 'off') + ', but the confirmation email could not be sent. Your email inbox may be the problem — codes go to the same address.';
+  }catch(e){
+    btn.disabled=false; err.textContent=e.message;
+  }
+}
 /* ----- forgot password ----- */
 async function doForgotSend(){
   const email=$('fp-email').value.trim(), err=$('fp-err'), btn=$('fp-sendbtn');
   if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return err.textContent='Enter a valid email address.';
-  err.textContent='Sending…'; btn.disabled=true;
+  err.textContent=''; btn.disabled=true; btn.innerHTML='<span class="btn-spin"></span>';
   try{
     const j = await api('/api/forgot-password','POST',{email});
     err.textContent='';
     $('fp-step2').style.display='block';
     $('fp-email').disabled=true; btn.textContent='Code Sent ✓';
-    err.textContent='If this email is registered, a code is on its way.';
-  }catch(e){ err.textContent=e.message; btn.disabled=false; }
+  }catch(e){ err.textContent=e.message; btn.disabled=false; btn.textContent='Send Code'; }
 }
 async function doForgotReset(){
   const email=$('fp-email').value.trim(), code=$('fp-code').value.trim(), pw=$('fp-pass').value;
-  const err=$('fp-err2');
+  const err=$('fp-err2'), btn=$('fp-step2').querySelector('.btn');
   if(code.length!==6) return err.textContent='Enter the 6-digit code.';
   if(pw.length<4) return err.textContent='Password must be at least 4 characters.';
-  err.textContent='Resetting…';
+  err.textContent=''; btn.disabled=true; btn.innerHTML='<span class="btn-spin"></span>';
   try{
     const r = await api('/api/reset-password','POST',{email, code, new_password:pw});
-    if(!r.ok) return err.textContent=r.error;
+    if(!r.ok){ btn.disabled=false; btn.textContent='Reset Password'; return err.textContent=r.error; }
     err.textContent='';
     $('fp-email').value=''; $('fp-email').disabled=false;
     $('fp-code').value=''; $('fp-pass').value='';
     $('fp-step2').style.display='none'; $('fp-sendbtn').disabled=false; $('fp-sendbtn').textContent='Send Code';
+    btn.disabled=false; btn.textContent='Reset Password';
     modal(true,'Password reset','Your password has been changed. Sign in with the new one.');
     show('v-signin');
-  }catch(e){ err.textContent=e.message; }
+  }catch(e){ btn.disabled=false; btn.textContent='Reset Password'; err.textContent=e.message; }
 }
 /* ----- email verification ----- */
 let PENDING_UID=0;
@@ -1503,24 +1569,31 @@ function startVerify(uid, email, sent){
   show('v-verify');
 }
 async function doVerify(){
-  const code=$('vf-code').value.trim(), err=$('vf-err');
+  const code=$('vf-code').value.trim(), err=$('vf-err'), btn=$('v-verify').querySelector('.btn');
   if(code.length<6) return err.textContent='Enter the 6-digit code from your email.';
-  err.textContent='Verifying…';
+  err.textContent=''; btn.disabled=true; btn.innerHTML='<span class="btn-spin"></span>';
   try{
     const j=await api('/api/verify-email','POST',{user_id:PENDING_UID, code});
-    if(!j.ok) return err.textContent=j.error;
+    if(!j.ok){ btn.disabled=false; btn.textContent='Verify & Open Account'; return err.textContent=j.error; }
     saveToken(j.token); ME=j.user; err.textContent='';
+    btn.disabled=false; btn.textContent='Verify & Open Account';
     modal(true,'Verified! 🎉','Your Panther Data account is ready. Fund your wallet to start buying.');
     show('v-dash');
-  }catch(e){ err.textContent=e.message; }
+  }catch(e){ btn.disabled=false; btn.textContent='Verify & Open Account'; err.textContent=e.message; }
 }
+let resendingCode=false;
 async function doResend(){
-  const err=$('vf-err'); err.textContent='Sending…';
+  if(resendingCode) return; resendingCode=true;
+  const err=$('vf-err'), link=$('vf-resend');
+  err.textContent=''; const oldLink=link.innerHTML;
+  link.innerHTML='<span style="display:inline-block;width:14px;height:14px;border:2px solid rgba(139,61,255,.25);border-top-color:#8b3dff;border-radius:50%;animation:spin .8s linear infinite;vertical-align:middle"></span>';
   try{
     const j=await api('/api/resend-code','POST',{user_id:PENDING_UID});
-    if(!j.ok) return err.textContent=j.error;
-    err.textContent='New code sent. Check your email.';
-  }catch(e){ err.textContent=e.message; }
+    resendingCode=false;
+    if(!j.ok){ err.textContent=j.error; link.innerHTML=oldLink; return; }
+    link.textContent='Code sent ✓';
+    setTimeout(()=>{ if(!resendingCode) link.innerHTML=oldLink; }, 4000);
+  }catch(e){ resendingCode=false; err.textContent=e.message; link.innerHTML=oldLink; }
 }
 /* ----- transaction PIN ----- */
 let pinResolve=null;
@@ -1543,15 +1616,16 @@ function pinCancel(){
   if(pinResolve) pinResolve(null); pinResolve=null;
 }
 async function doChangePin(){
-  const err=$('cp-err'), old=$('cp-old').value.trim(), nw=$('cp-new').value.trim();
+  const err=$('cp-err'), btn=$('cp-btn'), old=$('cp-old').value.trim(), nw=$('cp-new').value.trim();
   if(!/^\d{4}$/.test(nw)) return err.textContent='New PIN must be 4 digits.';
-  err.textContent='Updating…';
+  err.textContent=''; btn.disabled=true; btn.innerHTML='<span class="btn-spin"></span>';
   try{
     const j=await api('/api/change-pin','POST',{old_pin:old, new_pin:nw});
-    if(!j.ok) return err.textContent=j.error;
+    if(!j.ok){ btn.disabled=false; btn.textContent='Change PIN'; return err.textContent=j.error; }
     err.textContent=''; $('cp-old').value=''; $('cp-new').value='';
+    btn.disabled=false; btn.textContent='Change PIN';
     modal(true,'Done','Your transaction PIN has been changed.');
-  }catch(e){ err.textContent=e.message; }
+  }catch(e){ btn.disabled=false; btn.textContent='Change PIN'; err.textContent=e.message; }
 }
 function doLogout(silent){
   token=null; ME=null;
@@ -1706,6 +1780,10 @@ function renderProfile(){
   $('prof-name').textContent=ME.name; $('prof-sub').textContent=ME.phone;
   $('prof-user').textContent=ME.username || 'Not set';
   $('prof-email').textContent=ME.email; $('prof-bal').textContent=naira(ME.wallet);
+  const on = !!ME.login_2fa;
+  const sub=$('prof-2fa-sub'), btn=$('tfa-btn');
+  if(sub) sub.textContent = on ? 'On — a code is emailed at every sign-in' : 'Off — sign in with password only';
+  if(btn) btn.textContent = on ? 'Turn Off Sign-in Code' : 'Turn On Sign-in Code';
 }
 
 /* ----- data ----- */
@@ -1990,26 +2068,31 @@ async function buyCable(){
   const p=(CAB_CACHE[prov]||[])[curCabPlan];
   if(!p) return err.textContent='Package expired. Reloading…', renderCabPlans();
   const key=prov+':'+iuc;
+  const payBtn=$('cab-pay-btn');
   if(cabVerifiedFor!==key){
-    err.textContent='Verifying smartcard…';
+    err.textContent=''; $('cab-verified').style.display='none';
+    payBtn.disabled=true; payBtn.innerHTML='<span class="mini-spinner"></span>';
     try{
       const v=await api('/api/verify','POST',{serviceID:prov, billersCode:iuc});
+      payBtn.disabled=false; payBtn.innerHTML='Continue →';
       if(!v.ok) return err.textContent=v.error;
       cabVerifiedFor=key;
-      err.textContent='Verified: '+(v.customer||'customer')+'. Tap Continue again to confirm.';
+      $('cab-verified-name').textContent=v.customer||'customer';
+      $('cab-verified').style.display='block';
       return;
-    }catch(e){ return err.textContent=e.message; }
+    }catch(e){ payBtn.disabled=false; payBtn.innerHTML='Continue →'; return err.textContent=e.message; }
   }
-  err.textContent='Subscribing…';
+  payBtn.disabled=true; payBtn.innerHTML='<span class="mini-spinner"></span>';
   try{
-    const pin=await askPin(); if(!pin){err.textContent='';return;}
+    const pin=await askPin(); if(!pin){err.textContent=''; payBtn.disabled=false; payBtn.innerHTML='Continue →'; return;}
     const j=await api('/api/buy/cable','POST',{provider:prov, billersCode:iuc,
       variation_code:p.variation_code, phone:ME.phone, pin});
+    payBtn.disabled=false; payBtn.innerHTML='Continue →';
     if(!j.ok) return err.textContent=j.error;
-    err.textContent='';
+    err.textContent=''; $('cab-verified').style.display='none';
     modal(true,'Subscribed! 🎉', `${p.name} activated on ${iuc}.`);
     $('cab-iuc').value=''; curCabPlan=null; cabVerifiedFor=''; renderCabPlans(); refreshMe();
-  }catch(e){ err.textContent=e.message; }
+  }catch(e){ payBtn.disabled=false; payBtn.innerHTML='Continue →'; err.textContent=e.message; }
 }
 
 /* ----- power ----- */
@@ -2077,16 +2160,18 @@ async function buyPower(){
     await verifyPowerMeter();
     if(powVerifiedFor!==key) return;
   }
-  err.textContent='Processing…';
+  const payBtn=$('pow-pay-btn');
+  payBtn.disabled=true; payBtn.innerHTML='<span class="mini-spinner"></span>';
   try{
-    const pin=await askPin(); if(!pin){err.textContent='';return;}
+    const pin=await askPin(); if(!pin){err.textContent=''; payBtn.disabled=false; payBtn.innerHTML='Continue →'; return;}
     const j=await api('/api/buy/power','POST',{serviceID:svc, billersCode:meter,
       variation_code:type, amount:amt, phone:ME.phone, pin});
+    payBtn.disabled=false; payBtn.innerHTML='Continue →';
     if(!j.ok) return err.textContent=j.error;
     err.textContent='';
     modal(true,'Bill paid! 🎉', `${naira(amt)} token for meter ${meter}.`+(j.token?` Token: ${j.token}`:' Token sent via SMS by the disco.'));
     $('pow-meter').value=''; $('pow-amt').value=''; resetPowVerify(); refreshMe();
-  }catch(e){ err.textContent=e.message; }
+  }catch(e){ payBtn.disabled=false; payBtn.innerHTML='Continue →'; err.textContent=e.message; }
 }
 
 /* ----- funding (Monnify virtual account) ----- */
@@ -2117,8 +2202,6 @@ async function loadFundView(){
   if(cached){
     renderFundAcct(cached);
     syncFunding(true);
-  } else {
-    err.textContent='Loading your funding account…';
   }
   try{
     const j=await api('/api/fund-account','POST',{});
@@ -2142,8 +2225,8 @@ async function loadFundView(){
   }catch(e){ if(!cached) err.textContent=e.message; }
 }
 async function getFundAccount(){
-  const err=$('fund-err'); err.textContent='Creating your account…';
-  $('fund-get-btn').disabled=true;
+  const err=$('fund-err'), btn=$('fund-get-btn');
+  err.textContent=''; btn.disabled=true; btn.innerHTML='<span class="btn-spin"></span>';
   try{
     const bvn=($('fund-bvn').value||'').trim();
     const j=await api('/api/fund-account','POST',{bvn:bvn});
@@ -2158,12 +2241,12 @@ async function getFundAccount(){
       err.textContent=j.error||'Could not create account.';
     }
   }catch(e){ err.textContent=e.message; }
-  $('fund-get-btn').disabled=false;
+  btn.disabled=false; btn.textContent='Get My Account Number';
 }
 async function syncFunding(quiet, retried){
   const err=$('fund-sync-err'); const btn=$('fund-sync-btn');
-  if(!quiet) err.textContent='Checking for your transfer…';
-  if(btn) btn.disabled=true;
+  if(!quiet) err.textContent='';
+  if(btn){ btn.disabled=true; btn.innerHTML='<span class="btn-spin"></span>'; }
   try{
     const j=await api('/api/fund-sync','POST',{});
     if(j.ok){
@@ -2175,14 +2258,13 @@ async function syncFunding(quiet, retried){
         err.textContent='';
         modal(true,'Already received','₦'+Number(j.recent_funding.amount).toLocaleString()+' is already in your wallet.');
       } else if(!quiet && !retried){
-        err.textContent='Still checking… one moment.';
         setTimeout(()=>syncFunding(false,true), 30000);
       } else if(!quiet){
         err.textContent='No new transfer found yet. If you just sent it, wait a minute and tap again.';
       }
     } else if(!quiet){ err.textContent=j.error||'Could not check. Try again.'; }
   }catch(e){ if(!quiet) err.textContent=e.message; }
-  if(btn) btn.disabled=false;
+  if(btn){ btn.disabled=false; btn.textContent="I've sent the money — check now"; }
 }
 
 /* ----- boot ----- */
