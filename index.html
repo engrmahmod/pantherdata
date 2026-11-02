@@ -808,6 +808,7 @@
       <div class="err" id="fund-err"></div>
       <button class="btn" id="fund-get-btn" onclick="getFundAccount()">Get My Account Number</button>
     </div>
+    <div class="empty" id="fund-loading" style="display:none">Loading your account…</div>
     <div class="err" id="fund-err2"></div>
   </div>
 
@@ -1752,7 +1753,12 @@ async function renderDash(){
   }else if(!window.HIST_TXS || !window.HIST_TXS.length){ $('dash-tx').innerHTML='<div class="empty">Could not load transactions.</div>'; }
   try{
     const prev=JSON.parse(localStorage.getItem('sv_dash')||'null')||{};
-    localStorage.setItem('sv_dash', JSON.stringify({name:ME.name, username:ME.username, wallet:ME.wallet, spent: j.ok?spent:prev.spent, count: j.ok?count:prev.count, txs: j.ok?(window.HIST_TXS||[]).slice(0,100):prev.txs}));
+    // Carry the funding account in the dashboard save, so Fund Wallet can
+    // show it instantly on the next open without waiting on the server.
+    // Only a fresh /api/me answer may set or clear it; a stale save is kept.
+    let dashFund = prev.fund||null;
+    if(m.ok){ dashFund = ME.monnify_acct ? {account_number:ME.monnify_acct, bank_name:ME.monnify_bank||'', account_name:ME.monnify_acct_name||'', none:false} : {none:true}; }
+    localStorage.setItem('sv_dash', JSON.stringify({name:ME.name, username:ME.username, wallet:ME.wallet, spent: j.ok?spent:prev.spent, count: j.ok?count:prev.count, txs: j.ok?(window.HIST_TXS||[]).slice(0,100):prev.txs, fund:dashFund}));
   }catch(e){}
 }
 async function renderHistory(){
@@ -2208,17 +2214,43 @@ function readFundCache(){
   }catch(e){ return null; }
 }
 async function loadFundView(){
-  $('fund-acct').style.display='none'; $('fund-get').style.display='none';
+  // Instant first, live refresh second — exactly like the dashboard and
+  // the data pages: whatever is already saved on this phone shows at
+  // once, and the server only replaces it when it answers. Nothing on
+  // this page ever sits blank while waiting.
+  $('fund-acct').style.display='none'; $('fund-get').style.display='none'; $('fund-loading').style.display='none';
   const err=$('fund-err2');
   const cached=readFundCache();
+  let instant=false;
   if(cached){
     renderFundAcct(cached);
     syncFunding(true);
+    instant=true;
+  } else {
+    try{
+      const d=JSON.parse(localStorage.getItem('sv_dash')||'null');
+      if(d && ME && d.username===ME.username && d.fund){
+        if(d.fund.account_number){
+          renderFundAcct({account_number:d.fund.account_number, bank_name:d.fund.bank_name||'', account_name:d.fund.account_name||''});
+          instant=true;
+        } else if(d.fund.none){
+          $('fund-bvn-wrap').style.display='block';
+          $('fund-get').style.display='block';
+          instant=true;
+        }
+      }
+    }catch(e){}
   }
+  if(!instant) $('fund-loading').style.display='block';
   try{
     const j=await api('/api/fund-account','POST',{});
+    $('fund-loading').style.display='none';
     if(j.ok){
       try{ localStorage.setItem('sv_fund', JSON.stringify({user_id:(ME&&ME.id)||null, account_number:j.account_number||'', bank_name:j.bank_name||'', account_name:j.account_name||''})); }catch(e){}
+      try{
+        const d=JSON.parse(localStorage.getItem('sv_dash')||'null')||{};
+        if(!ME || d.username===ME.username){ d.fund={account_number:j.account_number||'', bank_name:j.bank_name||'', account_name:j.account_name||'', none:false}; localStorage.setItem('sv_dash', JSON.stringify(d)); }
+      }catch(e){}
       renderFundAcct(j);
       if(!cached) syncFunding(true);
     } else {
@@ -2228,6 +2260,10 @@ async function loadFundView(){
       $('fund-acct').style.display='none';
       err.textContent='';
       if(j.need_bvn){
+        try{
+          const d=JSON.parse(localStorage.getItem('sv_dash')||'null')||{};
+          if(!ME || d.username===ME.username){ d.fund={none:true}; localStorage.setItem('sv_dash', JSON.stringify(d)); }
+        }catch(e){}
         $('fund-bvn-wrap').style.display='block';
         $('fund-get').style.display='block';
         $('fund-err').textContent=j.error||'';
@@ -2238,7 +2274,11 @@ async function loadFundView(){
         if(j.error) $('fund-err').textContent=j.error;
       }
     }
-  }catch(e){ if(!cached) err.textContent=e.message; }
+  }catch(e){
+    $('fund-loading').style.display='none';
+    // A failed refresh never wipes what is already on screen.
+    if(!instant) err.textContent=e.message;
+  }
 }
 async function getFundAccount(){
   const err=$('fund-err'), btn=$('fund-get-btn');
@@ -2248,6 +2288,7 @@ async function getFundAccount(){
     const j=await api('/api/fund-account','POST',{bvn:bvn});
     if(j.ok){
       try{ localStorage.setItem('sv_fund', JSON.stringify({user_id:(ME&&ME.id)||null, account_number:j.account_number||'', bank_name:j.bank_name||'', account_name:j.account_name||''})); }catch(e){}
+      try{ const d=JSON.parse(localStorage.getItem('sv_dash')||'null')||{}; if(!ME || d.username===ME.username){ d.fund={account_number:j.account_number||'', bank_name:j.bank_name||'', account_name:j.account_name||'', none:false}; localStorage.setItem('sv_dash', JSON.stringify(d)); } }catch(e){}
       $('fund-acct-no').value=j.account_number||'';
       $('fund-bank').value=j.bank_name||'';
       $('fund-acct-name').value=j.account_name||'';
