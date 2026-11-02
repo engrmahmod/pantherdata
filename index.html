@@ -3,10 +3,18 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<script>try{if(localStorage.getItem('sv_token'))document.documentElement.classList.add('sv-logged');}catch(e){}</script>
+<script>try{if(localStorage.getItem('sv_token'))document.documentElement.classList.add('sv-logged');}catch(e){}try{if(window.matchMedia('(display-mode: standalone)').matches||navigator.standalone)document.documentElement.classList.add('pd-standalone');}catch(e){}</script>
 <title>Panther Data — Buy Cheap Data, Airtime, Cable TV & Electricity in Nigeria</title>
 <meta name="description" content="Panther Data: buy cheap MTN, Airtel, Glo & 9mobile data, airtime, DStv/GOtv/Startimes subscriptions and electricity bills in Nigeria — instantly, at unbeatable prices.">
 <link rel="canonical" href="https://pantherdata.com.ng/">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#8b3dff">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Panther Data">
+<link rel="apple-touch-icon" href="/icon-180.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
 <meta name="robots" content="index, follow">
 <meta property="og:type" content="website">
 <meta property="og:title" content="Panther Data — Low Prices. Fast Service.">
@@ -59,6 +67,19 @@
   #sitemode .hero .sub{color:#5b6b8c;margin:16px auto 26px;line-height:1.65;font-size:.96rem;max-width:520px}
   #sitemode .cta{background:#1f6feb;border:none;color:#fff;font-weight:800;border-radius:999px;padding:17px 40px;font-size:1rem;box-shadow:0 10px 26px rgba(31,111,235,.35);cursor:pointer;width:100%;max-width:420px;font-family:inherit}
   #sitemode .cta2{display:block;margin:12px auto 0;background:#fff;border:1.5px solid #dbe4f3;color:#0f1e3d;border-radius:999px;padding:14px 40px;font-weight:800;cursor:pointer;width:100%;max-width:420px;text-decoration:none}
+  #sitemode #install-btn{display:none;background:linear-gradient(120deg,#3b0764,#7c3aed 55%,#a855f7);color:#fff;border:none;border-radius:999px;padding:14px 40px;font-weight:800;cursor:pointer;width:100%;max-width:420px;margin:12px auto 0;font-family:inherit;font-size:1rem;box-shadow:0 10px 26px rgba(139,61,255,.35)}
+  /* ---------- installed app: more beautiful than the website ---------- */
+  html.pd-standalone #sitemode .logo span{color:#8b3dff}
+  html.pd-standalone #sitemode .nav-cta{background:linear-gradient(120deg,#7c3aed,#a855f7);box-shadow:0 10px 26px rgba(139,61,255,.35)}
+  html.pd-standalone #sitemode .hero{background:linear-gradient(135deg,#1e0a4a,#6d28d9 50%,#9333ea);padding:44px 0 34px;border-radius:0 0 32px 32px}
+  html.pd-standalone #sitemode .hero .badge{background:#ffffff22;color:#fff}
+  html.pd-standalone #sitemode .hero h1{color:#fff}
+  html.pd-standalone #sitemode .hero h1 em{color:#ffc542}
+  html.pd-standalone #sitemode .hero .sub{color:#e9e2ff}
+  html.pd-standalone #sitemode .hero .cta{background:#fff;color:#5b21b6;box-shadow:0 10px 26px rgba(0,0,0,.25)}
+  html.pd-standalone #sitemode .hero .cta2{background:transparent;border:1.5px solid #ffffff66;color:#fff}
+  html.pd-standalone #sitemode .hero .stats b{color:#ffc542}
+  html.pd-standalone #sitemode .svc{box-shadow:0 12px 30px rgba(124,58,237,.12);border:1px solid #efe9ff}
   #sitemode .frow{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:26px 0 6px}
   #sitemode .f{background:#fff;border-radius:18px;padding:16px 6px;box-shadow:0 4px 14px rgba(20,40,90,.06)}
   #sitemode .f .e{font-size:1.7rem}
@@ -426,6 +447,7 @@
       <p class="sub">Cheap mobile data, airtime, cable TV subscriptions and electricity bills — delivered instantly to any phone in Nigeria.</p>
       <button class="cta" onclick="go('v-signup')">Create Free Account</button>
       <a class="cta2" href="#s-pricing">See Prices</a>
+      <button id="install-btn">📲 Install Panther Data App</button>
       <div class="frow">
         <div class="f"><div class="e">📱</div><small>Data</small></div>
         <div class="f"><div class="e">📞</div><small>Airtime</small></div>
@@ -2138,6 +2160,22 @@ async function boot(){
   if(token){ go('v-dash'); return; }
   go('site');
 }
+/* ---------- Panther Data web app (PWA install) ---------- */
+if('serviceWorker' in navigator){ window.addEventListener('load', function(){ navigator.serviceWorker.register('/sw.js').catch(function(){}); }); }
+(function(){
+  var btn = $('install-btn'); if(!btn) return;
+  var deferred = null;
+  var isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  var isStandalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  if(isStandalone) return;
+  window.addEventListener('beforeinstallprompt', function(e){ e.preventDefault(); deferred = e; btn.style.display = 'block'; });
+  if(isIOS){ btn.style.display = 'block'; }
+  btn.addEventListener('click', function(){
+    if(deferred){ deferred.prompt(); deferred.userChoice.then(function(){ deferred = null; btn.style.display = 'none'; }).catch(function(){}); }
+    else if(isIOS){ modal(true, 'Install Panther Data', 'Tap Share, then Add to Home Screen. The Panther Data icon will appear on your home screen like any other app.'); }
+  });
+  window.addEventListener('appinstalled', function(){ btn.style.display = 'none'; });
+})();
 boot();
 </script>
 </body>
