@@ -497,6 +497,7 @@
         <div><b>iPhone:</b> Share → Add to Home Screen</div>
       </div>
       <div class="appnote">Free • No Play Store needed • Same account and wallet</div>
+      <div id="app-help" style="display:none; margin-top:16px; background:#ffffff22; border:1px solid #ffffff44; border-radius:16px; padding:14px; text-align:left; font-size:.85rem; line-height:1.9; color:#fff"><b>Android:</b> Chrome menu → Install and create shortcut → Install<br><b>iPhone:</b> Share → Add to Home Screen<br><span style="color:#ffe9a8">Already installed? Open the purple PD icon on your home screen.</span></div>
     </div>
   </div>
 </section>
@@ -2190,7 +2191,11 @@ if('serviceWorker' in navigator){ window.addEventListener('load', function(){ na
 var PD_DEFERRED = null;
 function pdInstallApp(){
   if(PD_DEFERRED){ PD_DEFERRED.prompt(); PD_DEFERRED.userChoice.then(function(){ PD_DEFERRED = null; var b=$('install-btn'); if(b) b.style.display='none'; }).catch(function(){}); return; }
-  if(/iphone|ipad|ipod/i.test(navigator.userAgent)){ modal(true, 'Install Panther Data', 'Tap Share, then Add to Home Screen. The Panther Data icon will appear on your home screen like any other app.'); return; }
+  /* Fallback must NOT use the shared modal: it lives inside the dashboard
+     area, which is hidden on the homepage, so the message would be invisible
+     and the tap would look dead. Show the steps right in the app section. */
+  var help = $('app-help');
+  if(help){ help.style.display = 'block'; help.scrollIntoView({behavior:'smooth', block:'center'}); return; }
   modal(true, 'Install Panther Data', 'On Android, open this site in Chrome, tap the menu, then Install and create shortcut, then Install. On iPhone, tap Share, then Add to Home Screen.');
 }
 (function(){
