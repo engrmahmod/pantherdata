@@ -801,6 +801,31 @@
     </div>
     <div id="fund-get" style="display:none">
       <div class="howcard">
+        <h4>Fund without BVN</h4>
+        <p>Pick an amount and get a one-time account number. No BVN or NIN needed. The number works for this payment only.</p>
+      </div>
+      <div class="field"><label>Amount</label><input id="ot-amount" inputmode="numeric" placeholder="Minimum ₦100"></div>
+      <div class="err" id="ot-err"></div>
+      <button class="btn" id="ot-btn" onclick="getOneTimeAccount()">Get One-Time Account</button>
+      <div id="ot-acct" style="display:none">
+        <div class="vacc">
+          <small>YOUR ONE-TIME ACCOUNT</small>
+          <input id="ot-bank" class="vbank" readonly>
+          <input id="ot-acct-no" class="vnum" readonly>
+          <input id="ot-acct-name" class="vname" readonly>
+          <div class="copyrow">
+            <div class="copybtn" onclick="copyFund('ot-acct-no')">📋 Copy Number</div>
+            <div class="copybtn" onclick="copyFund('ot-bank')">🏦 Copy Bank</div>
+          </div>
+        </div>
+        <div class="howcard">
+          <h4>How it works</h4>
+          <p>1. Transfer the exact amount above to this account from your bank app.<br>2. Tap the button below and your wallet is credited.<br>3. This number works for this payment only.</p>
+        </div>
+        <button class="btn" id="ot-sync-btn" onclick="checkOneTime()">I've sent the money — check now</button>
+        <div class="err" id="ot-sync-err" style="margin-top:8px"></div>
+      </div>
+      <div class="howcard">
         <h4>Get your permanent account</h4>
         <p>You will get your own personal account number. Any transfer to it lands in your wallet automatically.</p>
       </div>
@@ -2309,11 +2334,13 @@ async function loadFundView(){
         }catch(e){}
         $('fund-bvn-wrap').style.display='block';
         $('fund-get').style.display='block';
+        restoreOneTime();
         $('fund-err').textContent=j.error||'';
       } else if(j.error && j.error.indexOf('not set up')!==-1){
         err.textContent=j.error;
       } else {
         $('fund-get').style.display='block';
+        restoreOneTime();
         if(j.error) $('fund-err').textContent=j.error;
       }
     }
@@ -2342,6 +2369,69 @@ async function getFundAccount(){
     }
   }catch(e){ err.textContent=e.message; }
   btn.disabled=false; btn.textContent='Get My Account Number';
+}
+// One-time invoice funding: a saved pending invoice belongs to exactly one
+// user, like the fund cache. A copy owned by someone else is dropped.
+function readOneTime(){
+  try{
+    const c=JSON.parse(localStorage.getItem('sv_invoice')||'null');
+    if(!c || !c.reference || !c.account_number) return null;
+    if(!ME || !ME.id || c.user_id!==ME.id){ try{ localStorage.removeItem('sv_invoice'); }catch(e){} return null; }
+    return c;
+  }catch(e){ return null; }
+}
+function renderOneTime(a){
+  $('ot-bank').value=a.bank_name||'';
+  $('ot-acct-no').value=a.account_number||'';
+  $('ot-acct-name').value=a.account_name||'';
+  $('ot-acct').style.display='block';
+}
+function restoreOneTime(){
+  const p=readOneTime();
+  if(p) renderOneTime(p);
+  else $('ot-acct').style.display='none';
+}
+async function getOneTimeAccount(){
+  const err=$('ot-err'), btn=$('ot-btn');
+  err.textContent='';
+  const amount=parseInt(($('ot-amount').value||'').replace(/\D/g,''),10)||0;
+  if(amount<100){ err.textContent='Minimum funding is ₦100.'; return; }
+  btn.disabled=true; btn.innerHTML='<span class="btn-spin"></span>';
+  try{
+    const j=await api('/api/fund/invoice','POST',{amount});
+    if(j.ok){
+      try{ localStorage.setItem('sv_invoice', JSON.stringify({user_id:(ME&&ME.id)||null, reference:j.reference, amount:j.amount, account_number:j.account_number||'', bank_name:j.bank_name||'', account_name:j.account_name||''})); }catch(e){}
+      renderOneTime(j);
+    } else {
+      err.textContent=j.error||'Could not create account.';
+    }
+  }catch(e){ err.textContent=e.message; }
+  btn.disabled=false; btn.textContent='Get One-Time Account';
+}
+async function checkOneTime(){
+  const err=$('ot-sync-err'), btn=$('ot-sync-btn');
+  err.textContent='';
+  const p=readOneTime();
+  if(!p){ err.textContent='No one-time payment to check. Create one above.'; return; }
+  btn.disabled=true; btn.innerHTML='<span class="btn-spin"></span>';
+  try{
+    const j=await api('/api/fund/invoice-check','POST',{reference:p.reference});
+    if(j.ok && j.paid){
+      try{ localStorage.removeItem('sv_invoice'); }catch(e){}
+      if(ME && j.balance!==undefined) ME.wallet=j.balance;
+      $('ot-acct').style.display='none';
+      modal(true,'Wallet credited','₦'+Number(p.amount).toLocaleString()+' added to your wallet.');
+    } else if(j.expired){
+      try{ localStorage.removeItem('sv_invoice'); }catch(e){}
+      $('ot-acct').style.display='none';
+      err.textContent='This account has expired. Create a new one above.';
+    } else if(j.ok){
+      err.textContent='No payment found yet. If you just sent it, wait a minute and tap again.';
+    } else {
+      err.textContent=j.error||'Could not check. Try again.';
+    }
+  }catch(e){ err.textContent=e.message; }
+  btn.disabled=false; btn.textContent="I've sent the money — check now";
 }
 async function syncFunding(quiet, retried){
   const err=$('fund-sync-err'); const btn=$('fund-sync-btn');
