@@ -1480,7 +1480,7 @@ async function doSignin(){
       const lc=$('lc-err'); if(lc){ lc.textContent = j.email_sent ? '' : 'We could not send the code. Tap Resend code.'; lc.style.display = j.email_sent ? 'none' : 'block'; }
       show('v-logincode'); return;
     }
-    saveToken(j.token); ME=j.user;
+    saveToken(j.token); ME=j.user; clearUserCaches();
     show('v-dash');
   }catch(e){
     btn.disabled=false; btn.textContent='Sign In';
@@ -1496,7 +1496,7 @@ async function doLoginCode(){
     const j = await api('/api/verify-login-code','POST',{user_id:pendingLoginUid, code});
     btn.disabled=false; btn.textContent='Verify & Sign In';
     if(!j.ok) return showErr(j.error);
-    saveToken(j.token); ME=j.user; pendingLoginUid=0;
+    saveToken(j.token); ME=j.user; pendingLoginUid=0; clearUserCaches();
     show('v-dash');
   }catch(e){
     btn.disabled=false; btn.textContent='Verify & Sign In';
@@ -1575,7 +1575,7 @@ async function doVerify(){
   try{
     const j=await api('/api/verify-email','POST',{user_id:PENDING_UID, code});
     if(!j.ok){ btn.disabled=false; btn.textContent='Verify & Open Account'; return err.textContent=j.error; }
-    saveToken(j.token); ME=j.user; err.textContent='';
+    saveToken(j.token); ME=j.user; err.textContent=''; clearUserCaches();
     btn.disabled=false; btn.textContent='Verify & Open Account';
     modal(true,'Verified! 🎉','Your Panther Data account is ready. Fund your wallet to start buying.');
     show('v-dash');
@@ -1630,6 +1630,7 @@ async function doChangePin(){
 function doLogout(silent){
   token=null; ME=null;
   try{ localStorage.removeItem('sv_token'); }catch(e){}
+  clearUserCaches();
   if(!silent) go('site'); else go('site');
 }
 
@@ -2189,10 +2190,21 @@ function renderFundAcct(a){
   $('fund-acct').style.display='block'; $('fund-get').style.display='none';
   $('fund-err2').textContent='';
 }
+function clearUserCaches(){
+  try{ localStorage.removeItem('sv_fund'); localStorage.removeItem('sv_dash'); }catch(e){}
+}
 function readFundCache(){
   try{
     const c=JSON.parse(localStorage.getItem('sv_fund')||'null');
-    return (c && c.account_number) ? c : null;
+    if(!c || !c.account_number) return null;
+    // A saved account belongs to exactly one user. A copy with no owner
+    // (written before this fix) or one owned by someone else must never
+    // be shown to the signed-in user — fail closed and drop it.
+    if(!ME || !ME.id || c.user_id!==ME.id){
+      try{ localStorage.removeItem('sv_fund'); }catch(e){}
+      return null;
+    }
+    return c;
   }catch(e){ return null; }
 }
 async function loadFundView(){
@@ -2206,10 +2218,14 @@ async function loadFundView(){
   try{
     const j=await api('/api/fund-account','POST',{});
     if(j.ok){
-      try{ localStorage.setItem('sv_fund', JSON.stringify({account_number:j.account_number||'', bank_name:j.bank_name||'', account_name:j.account_name||''})); }catch(e){}
+      try{ localStorage.setItem('sv_fund', JSON.stringify({user_id:(ME&&ME.id)||null, account_number:j.account_number||'', bank_name:j.bank_name||'', account_name:j.account_name||''})); }catch(e){}
       renderFundAcct(j);
       if(!cached) syncFunding(true);
-    } else if(!cached){
+    } else {
+      // The server is the truth about this user. If it says this user has
+      // no account (BVN needed or any other failure), no saved copy may
+      // stay on screen — not even one that flashed a moment ago.
+      $('fund-acct').style.display='none';
       err.textContent='';
       if(j.need_bvn){
         $('fund-bvn-wrap').style.display='block';
@@ -2231,7 +2247,7 @@ async function getFundAccount(){
     const bvn=($('fund-bvn').value||'').trim();
     const j=await api('/api/fund-account','POST',{bvn:bvn});
     if(j.ok){
-      try{ localStorage.setItem('sv_fund', JSON.stringify({account_number:j.account_number||'', bank_name:j.bank_name||'', account_name:j.account_name||''})); }catch(e){}
+      try{ localStorage.setItem('sv_fund', JSON.stringify({user_id:(ME&&ME.id)||null, account_number:j.account_number||'', bank_name:j.bank_name||'', account_name:j.account_name||''})); }catch(e){}
       $('fund-acct-no').value=j.account_number||'';
       $('fund-bank').value=j.bank_name||'';
       $('fund-acct-name').value=j.account_name||'';
