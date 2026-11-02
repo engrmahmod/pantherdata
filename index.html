@@ -982,6 +982,7 @@ async function refreshMe(){
     const m = await api('/api/me');
     if(m.ok){
       ME = m.user;
+      cacheFundFromUser(ME);
       try{ const prev=JSON.parse(localStorage.getItem('sv_dash')||'null')||{}; localStorage.setItem('sv_dash', JSON.stringify({...prev, name:ME.name, username:ME.username, wallet:ME.wallet})); }catch(e){}
     }
   }catch(e){}
@@ -1481,7 +1482,7 @@ async function doSignin(){
       const lc=$('lc-err'); if(lc){ lc.textContent = j.email_sent ? '' : 'We could not send the code. Tap Resend code.'; lc.style.display = j.email_sent ? 'none' : 'block'; }
       show('v-logincode'); return;
     }
-    saveToken(j.token); ME=j.user; clearUserCaches();
+    saveToken(j.token); ME=j.user; clearUserCaches(); cacheFundFromUser(ME);
     show('v-dash');
   }catch(e){
     btn.disabled=false; btn.textContent='Sign In';
@@ -1497,7 +1498,7 @@ async function doLoginCode(){
     const j = await api('/api/verify-login-code','POST',{user_id:pendingLoginUid, code});
     btn.disabled=false; btn.textContent='Verify & Sign In';
     if(!j.ok) return showErr(j.error);
-    saveToken(j.token); ME=j.user; pendingLoginUid=0; clearUserCaches();
+    saveToken(j.token); ME=j.user; pendingLoginUid=0; clearUserCaches(); cacheFundFromUser(ME);
     show('v-dash');
   }catch(e){
     btn.disabled=false; btn.textContent='Verify & Sign In';
@@ -1576,7 +1577,7 @@ async function doVerify(){
   try{
     const j=await api('/api/verify-email','POST',{user_id:PENDING_UID, code});
     if(!j.ok){ btn.disabled=false; btn.textContent='Verify & Open Account'; return err.textContent=j.error; }
-    saveToken(j.token); ME=j.user; err.textContent=''; clearUserCaches();
+    saveToken(j.token); ME=j.user; err.textContent=''; clearUserCaches(); cacheFundFromUser(ME);
     btn.disabled=false; btn.textContent='Verify & Open Account';
     modal(true,'Verified! 🎉','Your Panther Data account is ready. Fund your wallet to start buying.');
     show('v-dash');
@@ -1735,6 +1736,7 @@ async function renderDash(){
   ]);
   if(m.ok) ME = m.user;
   if(!ME){ go('site'); return; }
+  cacheFundFromUser(ME);
   const dispName = ME.username || ME.name.split(' ')[0];
   $('dash-name').textContent = dispName;
   $('dash-ava').textContent = (dispName.trim()[0]||'M').toUpperCase();
@@ -1760,6 +1762,9 @@ async function renderDash(){
     if(m.ok){ dashFund = ME.monnify_acct ? {account_number:ME.monnify_acct, bank_name:ME.monnify_bank||'', account_name:ME.monnify_acct_name||'', none:false} : {none:true}; }
     localStorage.setItem('sv_dash', JSON.stringify({name:ME.name, username:ME.username, wallet:ME.wallet, spent: j.ok?spent:prev.spent, count: j.ok?count:prev.count, txs: j.ok?(window.HIST_TXS||[]).slice(0,100):prev.txs, fund:dashFund}));
   }catch(e){}
+  // If the account still isn't saved anywhere (older session shape), fetch
+  // it quietly now so the Fund tap never waits. Never blocks this render.
+  prefetchFundAccount();
 }
 async function renderHistory(){
   // Instant from the saved copy first, then live refresh. A failed refresh
@@ -2198,6 +2203,44 @@ function renderFundAcct(a){
 }
 function clearUserCaches(){
   try{ localStorage.removeItem('sv_fund'); localStorage.removeItem('sv_dash'); }catch(e){}
+}
+// Save a funding account the moment it is known — at sign-in, at session
+// restore, at dashboard load — so Fund Wallet never has to wait on the
+// server when it is tapped. No network call here: the user object already
+// carries the account. The dashboard save is only touched when it belongs
+// to this user (or is empty); the tagged fund cache is always safe to write.
+function cacheFundFromUser(u){
+  if(!u) return;
+  try{
+    const d=JSON.parse(localStorage.getItem('sv_dash')||'null')||{};
+    const dashMine = !d.username || (u.username && d.username===u.username);
+    if(dashMine && !d.username && u.username) d.username=u.username;
+    if(u.monnify_acct){
+      try{ localStorage.setItem('sv_fund', JSON.stringify({user_id:u.id||null, account_number:u.monnify_acct, bank_name:u.monnify_bank||'', account_name:u.monnify_acct_name||''})); }catch(e){}
+      if(dashMine){ d.fund={account_number:u.monnify_acct, bank_name:u.monnify_bank||'', account_name:u.monnify_acct_name||'', none:false}; localStorage.setItem('sv_dash', JSON.stringify(d)); }
+    } else if(dashMine){
+      d.fund={none:true}; localStorage.setItem('sv_dash', JSON.stringify(d));
+    }
+  }catch(e){}
+}
+// Last-resort background fetch for the rare case the user object carries no
+// funding account (older session shape). Silent, never touches the screen;
+// Fund Wallet's own load still runs when it is tapped.
+let __fundPrefetching=false;
+function prefetchFundAccount(){
+  if(!ME || __fundPrefetching) return;
+  try{
+    if(readFundCache()) return;
+    const d=JSON.parse(localStorage.getItem('sv_dash')||'null');
+    if(d && d.username===ME.username && d.fund) return;
+  }catch(e){}
+  __fundPrefetching=true;
+  api('/api/fund-account','POST',{}).then(j=>{
+    if(j.ok){ cacheFundFromUser({id:ME.id, username:ME.username, monnify_acct:j.account_number, monnify_bank:j.bank_name, monnify_acct_name:j.account_name}); }
+    else if(j.need_bvn){
+      try{ const d=JSON.parse(localStorage.getItem('sv_dash')||'null')||{}; if(!ME || d.username===ME.username){ d.fund={none:true}; localStorage.setItem('sv_dash', JSON.stringify(d)); } }catch(e){}
+    }
+  }).catch(()=>{}).finally(()=>{ __fundPrefetching=false; });
 }
 function readFundCache(){
   try{
