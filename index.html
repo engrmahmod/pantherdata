@@ -68,6 +68,15 @@
   #sitemode .cta{background:#1f6feb;border:none;color:#fff;font-weight:800;border-radius:999px;padding:17px 40px;font-size:1rem;box-shadow:0 10px 26px rgba(31,111,235,.35);cursor:pointer;width:100%;max-width:420px;font-family:inherit}
   #sitemode .cta2{display:block;margin:12px auto 0;background:#fff;border:1.5px solid #dbe4f3;color:#0f1e3d;border-radius:999px;padding:14px 40px;font-weight:800;cursor:pointer;width:100%;max-width:420px;text-decoration:none}
   #sitemode #install-btn{display:none;background:linear-gradient(120deg,#3b0764,#7c3aed 55%,#a855f7);color:#fff;border:none;border-radius:999px;padding:14px 40px;font-weight:800;cursor:pointer;width:100%;max-width:420px;margin:12px auto 0;font-family:inherit;font-size:1rem;box-shadow:0 10px 26px rgba(139,61,255,.35)}
+  #sitemode #s-app .appcard{background:linear-gradient(135deg,#1e0a4a,#6d28d9 50%,#9333ea);border-radius:28px;padding:28px 22px;text-align:center;color:#fff;box-shadow:0 18px 40px rgba(124,58,237,.30)}
+  #sitemode #s-app .appcard img{width:76px;height:76px;border-radius:20px;box-shadow:0 10px 24px rgba(0,0,0,.25)}
+  #sitemode #s-app .appcard h2{color:#fff;margin-top:14px}
+  #sitemode #s-app .appcard .lede{color:#e9e2ff}
+  #sitemode #s-app .appbtn{display:block;margin:6px auto 0;background:#fff;color:#5b21b6;border:none;border-radius:999px;padding:15px 40px;font-weight:800;cursor:pointer;width:100%;max-width:420px;font-family:inherit;font-size:1rem;box-shadow:0 10px 26px rgba(0,0,0,.25)}
+  #sitemode #s-app .appsteps{margin:18px auto 0;max-width:420px;text-align:left;font-size:.85rem;line-height:1.9;color:#e9e2ff}
+  #sitemode #s-app .appsteps b{color:#fff}
+  #sitemode #s-app .appnote{margin-top:14px;font-size:.82rem;color:#d8ccff}
+  html.pd-standalone #sitemode #s-app{display:none}
   /* ---------- installed app: more beautiful than the website ---------- */
   html.pd-standalone #sitemode .logo span{color:#8b3dff}
   html.pd-standalone #sitemode .nav-cta{background:linear-gradient(120deg,#7c3aed,#a855f7);box-shadow:0 10px 26px rgba(139,61,255,.35)}
@@ -431,7 +440,7 @@
   <div class="wrap">
     <a class="logo" onclick="go('site')">PANTHER<span>DATA</span></a>
     <div class="navlinks" id="navlinks">
-      <a href="#s-services" onclick="document.getElementById('navlinks').classList.remove('open')">Services</a><a href="#s-pricing" onclick="document.getElementById('navlinks').classList.remove('open')">Prices</a><a href="#s-faq" onclick="document.getElementById('navlinks').classList.remove('open')">FAQ</a>
+      <a href="#s-services" onclick="document.getElementById('navlinks').classList.remove('open')">Services</a><a href="#s-pricing" onclick="document.getElementById('navlinks').classList.remove('open')">Prices</a><a href="#s-app" onclick="document.getElementById('navlinks').classList.remove('open')">App</a><a href="#s-faq" onclick="document.getElementById('navlinks').classList.remove('open')">FAQ</a>
       <a class="m-signin" onclick="go('v-signin')">Sign In</a>
     </div>
     <button class="nav-cta" onclick="go('v-signin')">Sign In</button>
@@ -472,6 +481,22 @@
       <div class="svc reveal"><div class="ic" style="background:#dcfce7">📞</div><b>Airtime</b><p>Instant top-up to any network, any amount, any time of day.</p><span class="from">From ₦50</span></div>
       <div class="svc reveal"><div class="ic" style="background:#f3e8ff">📺</div><b>Cable TV</b><p>DStv, GOtv &amp; Startimes subscriptions without leaving your couch.</p><span class="from">From ₦1,200</span></div>
       <div class="svc reveal"><div class="ic" style="background:#fef3c7">💡</div><b>Electricity</b><p>All Discos — prepaid &amp; postpaid meters, tokens by SMS.</p><span class="from">From ₦500</span></div>
+    </div>
+  </div>
+</section>
+
+<section id="s-app">
+  <div class="wrap">
+    <div class="appcard">
+      <img src="/icon-192.png" alt="Panther Data app icon" width="76" height="76">
+      <h2>Get the Panther Data App</h2>
+      <p class="lede">Install it on your phone in seconds. It opens full screen like a normal app, with the same account and wallet.</p>
+      <button class="appbtn" onclick="pdInstallApp()">📲 Install App</button>
+      <div class="appsteps">
+        <div><b>Android:</b> Chrome menu → Install and create shortcut → Install</div>
+        <div><b>iPhone:</b> Share → Add to Home Screen</div>
+      </div>
+      <div class="appnote">Free • No Play Store needed • Same account and wallet</div>
     </div>
   </div>
 </section>
@@ -2162,18 +2187,19 @@ async function boot(){
 }
 /* ---------- Panther Data web app (PWA install) ---------- */
 if('serviceWorker' in navigator){ window.addEventListener('load', function(){ navigator.serviceWorker.register('/sw.js').catch(function(){}); }); }
+var PD_DEFERRED = null;
+function pdInstallApp(){
+  if(PD_DEFERRED){ PD_DEFERRED.prompt(); PD_DEFERRED.userChoice.then(function(){ PD_DEFERRED = null; var b=$('install-btn'); if(b) b.style.display='none'; }).catch(function(){}); return; }
+  if(/iphone|ipad|ipod/i.test(navigator.userAgent)){ modal(true, 'Install Panther Data', 'Tap Share, then Add to Home Screen. The Panther Data icon will appear on your home screen like any other app.'); return; }
+  modal(true, 'Install Panther Data', 'On Android, open this site in Chrome, tap the menu, then Install and create shortcut, then Install. On iPhone, tap Share, then Add to Home Screen.');
+}
 (function(){
   var btn = $('install-btn'); if(!btn) return;
-  var deferred = null;
-  var isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
   var isStandalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
   if(isStandalone) return;
-  window.addEventListener('beforeinstallprompt', function(e){ e.preventDefault(); deferred = e; btn.style.display = 'block'; });
-  if(isIOS){ btn.style.display = 'block'; }
-  btn.addEventListener('click', function(){
-    if(deferred){ deferred.prompt(); deferred.userChoice.then(function(){ deferred = null; btn.style.display = 'none'; }).catch(function(){}); }
-    else if(isIOS){ modal(true, 'Install Panther Data', 'Tap Share, then Add to Home Screen. The Panther Data icon will appear on your home screen like any other app.'); }
-  });
+  window.addEventListener('beforeinstallprompt', function(e){ e.preventDefault(); PD_DEFERRED = e; btn.style.display = 'block'; });
+  if(/iphone|ipad|ipod/i.test(navigator.userAgent)){ btn.style.display = 'block'; }
+  btn.addEventListener('click', pdInstallApp);
   window.addEventListener('appinstalled', function(){ btn.style.display = 'none'; });
 })();
 boot();
