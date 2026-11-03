@@ -1023,8 +1023,9 @@ function go(where){
   if(where === 'site'){
     app.style.display = 'none'; site.style.display = 'block'; window.scrollTo(0,0);
     $('navlinks').classList.remove('open');
-    /* Back to home on purpose: forget any remembered sign-up/sign-in page */
-    try{ sessionStorage.removeItem('sv_auth_view'); }catch(e){}
+    /* Back to home on purpose: forget any remembered sign-up/sign-in page
+       and any remembered app page (logout must not leak the last page). */
+    try{ sessionStorage.removeItem('sv_auth_view'); sessionStorage.removeItem('sv_view'); }catch(e){}
   } else {
     site.style.display = 'none'; app.style.display = 'block';
     show(where);
@@ -1033,12 +1034,16 @@ function go(where){
 function show(id){
   document.querySelectorAll('#appmode .view').forEach(v => v.classList.remove('active'));
   $(id).classList.add('active');
-  /* Remember sign-up/sign-in across a refresh, so reloading stays on that
-     page instead of dropping back to the homepage. Only those two pages are
-     remembered, and only while this tab is open (sessionStorage). */
+  /* Remember the page across a refresh, so reloading stays on that page
+     instead of dropping back to the dashboard or homepage. Sign-up/sign-in
+     keep their own key (sv_auth_view); every logged-in app page is
+     remembered under sv_view. Auth-flow pages (verify/forgot/logincode)
+     are never remembered here. Only while this tab is open (sessionStorage). */
   try{
     if(id==='v-signup' || id==='v-signin') sessionStorage.setItem('sv_auth_view', id);
     else if(id==='v-dash') sessionStorage.removeItem('sv_auth_view');
+    if(token && ['v-dash','v-fund','v-history','v-profile','v-data','v-airtime','v-cable','v-power'].includes(id))
+      sessionStorage.setItem('sv_view', id);
   }catch(e){}
   window.scrollTo(0,0);
   const logged = !!token;
@@ -2484,7 +2489,17 @@ async function boot(){
   // If a session token exists, open the dashboard immediately instead of
   // showing the homepage while the session is verified. renderDash checks
   // the token itself and falls back to the homepage if it is invalid.
-  if(token){ go('v-dash'); return; }
+  /* Logged in: reopen the page this tab was on (Fund Wallet, Transactions,
+     a buy page...), so a refresh stays on that page instead of dropping
+     back to the dashboard. Falls back to the dashboard when nothing was
+     remembered or the remembered page is not a real app page. */
+  if(token){
+    try{
+      var sv = sessionStorage.getItem('sv_view');
+      if(['v-dash','v-fund','v-history','v-profile','v-data','v-airtime','v-cable','v-power'].includes(sv)){ go(sv); return; }
+    }catch(e){}
+    go('v-dash'); return;
+  }
   /* A referral link (?ref=) opens sign-up directly instead of the
      homepage, so the visitor lands on the form with the code filled in.
      Logged-in users above already went to the dashboard. */
