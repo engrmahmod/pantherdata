@@ -2043,6 +2043,7 @@ function openReviewAirtime(){
         amt=parseInt($('air-amt').value,10);
   if(!validPhone(phone)) return err.textContent='Enter a valid 11-digit phone number.';
   if(!amt || amt<50) return err.textContent='Minimum airtime is ₦50.';
+  if(amt>50000) return err.textContent='Maximum airtime is ₦50,000.';
   err.textContent='';
   REVIEW_AIR={phone, amt, net};
   $('rv-title').textContent="You're sending airtime";
