@@ -966,7 +966,7 @@ let token = null;
 let lastActivity = Date.now(); // 3-minute inactivity logout tracker
 try { token = JSON.parse(localStorage.getItem('sv_token')); } catch(e){}
 if(token) lastActivity = Date.now();
-let ME = null, PAYSTACK_PK = '';
+let ME = null, PAYSTACK_PK = '', FUNDING_PROV = '';
 let curNet = 'MTN', curPlan = null, curCabPlan = null, curAirNet = 'MTN', curCabProv = 'DStv', curDisco = 0;
 let CAB_CACHE = {}, DISCOS = [], cabVerifiedFor = '', powVerifiedFor = '';
 
@@ -1795,7 +1795,7 @@ async function renderDash(){
     // show it instantly on the next open without waiting on the server.
     // Only a fresh /api/me answer may set or clear it; a stale save is kept.
     let dashFund = prev.fund||null;
-    if(m.ok){ dashFund = ME.monnify_acct ? {account_number:ME.monnify_acct, bank_name:ME.monnify_bank||'', account_name:ME.monnify_acct_name||'', none:false} : {none:true}; }
+    if(m.ok){ const fa = ME.xpouch_acct || ME.monnify_acct; dashFund = fa ? {account_number:fa, bank_name:(ME.xpouch_acct?ME.xpouch_bank:ME.monnify_bank)||'', account_name:(ME.xpouch_acct?ME.xpouch_acct_name:ME.monnify_acct_name)||'', none:false} : prev.fund||null; }
     localStorage.setItem('sv_dash', JSON.stringify({name:ME.name, username:ME.username, wallet:ME.wallet, spent: j.ok?spent:prev.spent, count: j.ok?count:prev.count, txs: j.ok?(window.HIST_TXS||[]).slice(0,100):prev.txs, fund:dashFund}));
   }catch(e){}
   // If the account still isn't saved anywhere (older session shape), fetch
@@ -2264,11 +2264,16 @@ function cacheFundFromUser(u){
     const d=JSON.parse(localStorage.getItem('sv_dash')||'null')||{};
     const dashMine = !d.username || (u.username && d.username===u.username);
     if(dashMine && !d.username && u.username) d.username=u.username;
-    if(u.monnify_acct){
-      try{ localStorage.setItem('sv_fund', JSON.stringify({user_id:u.id||null, account_number:u.monnify_acct, bank_name:u.monnify_bank||'', account_name:u.monnify_acct_name||''})); }catch(e){}
-      if(dashMine){ d.fund={account_number:u.monnify_acct, bank_name:u.monnify_bank||'', account_name:u.monnify_acct_name||'', none:false}; localStorage.setItem('sv_dash', JSON.stringify(d)); }
-    } else if(dashMine){
-      d.fund={none:true}; localStorage.setItem('sv_dash', JSON.stringify(d));
+    /* The cached funding account is the ACTIVE provider's account: Xpouch
+       now, Monnify only as a legacy fallback. When the user has neither,
+       write nothing — writing a "none" marker here is what used to flash
+       the old BVN form on Fund Wallet before the real account arrived. */
+    const acct = u.xpouch_acct || u.monnify_acct || '';
+    if(acct){
+      const bank = u.xpouch_acct ? (u.xpouch_bank||'') : (u.monnify_bank||'');
+      const name = u.xpouch_acct ? (u.xpouch_acct_name||'') : (u.monnify_acct_name||'');
+      try{ localStorage.setItem('sv_fund', JSON.stringify({user_id:u.id||null, account_number:acct, bank_name:bank, account_name:name})); }catch(e){}
+      if(dashMine){ d.fund={account_number:acct, bank_name:bank, account_name:name, none:false}; localStorage.setItem('sv_dash', JSON.stringify(d)); }
     }
   }catch(e){}
 }
@@ -2325,11 +2330,10 @@ async function loadFundView(){
         if(d.fund.account_number){
           renderFundAcct({account_number:d.fund.account_number, bank_name:d.fund.bank_name||'', account_name:d.fund.account_name||''});
           instant=true;
-        } else if(d.fund.none){
-          $('fund-bvn-wrap').style.display='block';
-          $('fund-get').style.display='block';
-          instant=true;
         }
+        /* A saved "none" marker never shows the fallback form up front:
+           it is usually stale (e.g. from before the user got an account),
+           and the live call below decides what is true. */
       }
     }catch(e){}
   }
@@ -2351,7 +2355,11 @@ async function loadFundView(){
       // stay on screen — not even one that flashed a moment ago.
       $('fund-acct').style.display='none';
       err.textContent='';
-      if(j.need_bvn){
+      if(FUNDING_PROV==='xpouch'){
+        // Xpouch needs no BVN and has no one-time card: the old fallback
+        // forms must never appear for an Xpouch user, only the error.
+        if(j.error) err.textContent=j.error;
+      } else if(j.need_bvn){
         try{
           const d=JSON.parse(localStorage.getItem('sv_dash')||'null')||{};
           if(!ME || d.username===ME.username){ d.fund={none:true}; localStorage.setItem('sv_dash', JSON.stringify(d)); }
@@ -2485,7 +2493,7 @@ async function syncFunding(quiet, retried){
 async function boot(){
   if(API_BASE.indexOf('YOUR-BACKEND')!==-1){ go('site'); return; }
   // Public config loads in the background; it must never block the first view.
-  fetch(API_BASE+'/api/config').then(r=>r.json()).then(c=>{ if(c.ok) PAYSTACK_PK=c.paystack_public_key||''; }).catch(()=>{});
+  fetch(API_BASE+'/api/config').then(r=>r.json()).then(c=>{ if(c.ok){ PAYSTACK_PK=c.paystack_public_key||''; if(c.fund_method) FUNDING_PROV=c.fund_method; } }).catch(()=>{});
   // If a session token exists, open the dashboard immediately instead of
   // showing the homepage while the session is verified. renderDash checks
   // the token itself and falls back to the homepage if it is invalid.
