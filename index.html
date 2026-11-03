@@ -616,6 +616,7 @@
         <div class="field"><label>Phone Number</label><input id="su-phone" inputmode="numeric" maxlength="11"></div>
         <div class="field"><label>Transaction PIN</label><input id="su-pin" inputmode="numeric" maxlength="4" type="password" placeholder="4 digits"><div class="su-hint">You'll enter this PIN before every purchase. Keep it secret.</div></div>
         <div class="field"><label>Password</label><div class="pw-wrap"><input id="su-pass" type="password"><button class="pw-eye" type="button" onclick="toggleSuPw(this)">👁️</button></div></div>
+        <div class="field"><label>Referral code (optional)</label><input id="su-ref" placeholder="Username of who referred you"><div class="su-hint">If someone shared Panther Data with you, enter their username.</div></div>
         <button class="btn" id="su-btn" onclick="doSignup()">Create Account</button>
         <div class="link">Already have an account? <a onclick="show('v-signin')">Sign in</a></div>
       </div>
@@ -875,6 +876,9 @@
     <div class="tx"><div class="t-ic">🪪</div><div class="t-main"><b>Username</b><small id="prof-user">—</small></div></div>
     <div class="tx"><div class="t-ic">📧</div><div class="t-main"><b>Email</b><small id="prof-email">—</small></div></div>
     <div class="tx"><div class="t-ic">💰</div><div class="t-main"><b>Wallet balance</b><small id="prof-bal">—</small></div></div>
+    <div class="tx"><div class="t-ic">🎁</div><div class="t-main"><b>Referrals</b><small id="ref-progress">Loading…</small></div></div>
+    <div class="field"><label>Your referral link</label><div style="display:flex;gap:8px"><input id="ref-link" readonly style="flex:1"><button class="btn ghost" type="button" onclick="copyRefLink()" style="white-space:nowrap">Copy</button></div><div class="su-hint">Share it: every 5 people who sign up with your link earns you ₦500 in your wallet.</div></div>
+    <div id="ref-rewards"></div>
     <div class="tx"><div class="t-ic">🔐</div><div class="t-main"><b>Transaction PIN</b><small>Required before every purchase</small></div></div>
     <div class="tx"><div class="t-ic">✉️</div><div class="t-main"><b>Sign-in code by email</b><small id="prof-2fa-sub">Off — sign in with password only</small></div></div>
     <div class="err" id="tfa-err"></div>
@@ -1457,7 +1461,8 @@ function toggleSuPw(btn){
 async function doSignup(){
   const name=$('su-name').value.trim(), user=$('su-user').value.trim(),
         email=$('su-email').value.trim(), phone=$('su-phone').value.trim(),
-        pass=$('su-pass').value, pin=$('su-pin').value.trim();
+        pass=$('su-pass').value, pin=$('su-pin').value.trim(),
+        ref=$('su-ref').value.trim();
   const notice=$('su-err'), btn=$('su-btn');
   const showErr=(m)=>{ notice.textContent=m; notice.style.display=m?'block':'none'; };
   if(name.length<3) return showErr('Please enter your full name.');
@@ -1469,7 +1474,7 @@ async function doSignup(){
   showErr('');
   btn.disabled=true; btn.innerHTML='<span class="btn-spin"></span>';
   try{
-    const j = await api('/api/signup','POST',{name, username:user, phone, email, password:pass, pin});
+    const j = await api('/api/signup','POST',{name, username:user, phone, email, password:pass, pin, ref});
     btn.disabled=false; btn.textContent='Create Account';
     if(!j.ok) return showErr(j.error);
     if(j.verify_required){ startVerify(j.user_id, j.email, j.email_sent); return; }
@@ -1481,6 +1486,7 @@ async function doSignup(){
     showErr(e.message);
   }
 }
+try{ const rp = new URLSearchParams(location.search).get('ref'); if(rp && $('su-ref')) $('su-ref').value = rp; }catch(e){}
 function toggleSiPw(btn){
   const inp=$('si-pass');
   if(inp.type==='password'){ inp.type='text'; btn.textContent='🙈'; }
@@ -1812,7 +1818,7 @@ async function renderHistory(){
     }
   }catch(e){ if(!window.HIST_TXS || !window.HIST_TXS.length) $('hist-list').innerHTML='<div class="empty">Could not load.</div>'; }
 }
-function renderProfile(){
+async function renderProfile(){
   if(!ME) return;
   $('prof-name').textContent=ME.name; $('prof-sub').textContent=ME.phone;
   $('prof-user').textContent=ME.username || 'Not set';
@@ -1821,6 +1827,19 @@ function renderProfile(){
   const sub=$('prof-2fa-sub'), btn=$('tfa-btn');
   if(sub) sub.textContent = on ? 'On — a code is emailed at every sign-in' : 'Off — sign in with password only';
   if(btn) btn.textContent = on ? 'Turn Off Sign-in Code' : 'Turn On Sign-in Code';
+  try{
+    const r = await api('/api/referral');
+    if(r.ok){
+      $('ref-link').value = location.origin + '/?ref=' + (r.code||'');
+      $('ref-progress').textContent = r.count + ' referral' + (r.count===1?'':'s') + ' · ' + r.to_go + ' more to ₦500 (at ' + r.next_milestone + ')';
+      $('ref-rewards').innerHTML = r.rewards.length ? r.rewards.map(w=>'<div class="tx"><div class="t-ic">🎁</div><div class="t-main"><b>'+naira(w.amount)+'</b><small>'+w.milestone+' referrals</small></div></div>').join('') : '';
+    }
+  }catch(e){}
+}
+async function copyRefLink(){
+  const v = $('ref-link').value; if(!v) return;
+  try{ await navigator.clipboard.writeText(v); }
+  catch(e){ $('ref-link').select(); document.execCommand('copy'); }
 }
 
 /* ----- data ----- */
