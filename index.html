@@ -2485,6 +2485,13 @@ async function boot(){
   // showing the homepage while the session is verified. renderDash checks
   // the token itself and falls back to the homepage if it is invalid.
   if(token){ go('v-dash'); return; }
+  /* A referral link (?ref=) opens sign-up directly instead of the
+     homepage, so the visitor lands on the form with the code filled in.
+     Logged-in users above already went to the dashboard. */
+  try{
+    var refp = new URLSearchParams(location.search).get('ref');
+    if(refp){ go('v-signup'); return; }
+  }catch(e){}
   /* No session: if the tab was on sign-up or sign-in before a refresh,
      open that page again instead of the homepage. */
   try{
