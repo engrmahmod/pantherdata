@@ -872,6 +872,22 @@
       <div class="err" id="fund-err"></div>
       <button class="btn" id="fund-get-btn" onclick="getFundAccount()">Get My Account Number</button>
     </div>
+    <div id="fund-manual" style="display:none">
+      <div class="vacc">
+        <small>MANUAL FUNDING</small>
+        <input id="fund-m-bank" class="vbank" readonly>
+        <input id="fund-m-acct-no" class="vnum" readonly>
+        <input id="fund-m-acct-name" class="vname" readonly>
+        <div class="copyrow">
+          <div class="copybtn" onclick="copyFund('fund-m-acct-no')">📋 Copy Number</div>
+          <div class="copybtn" onclick="copyFund('fund-m-bank')">🏦 Copy Bank</div>
+        </div>
+      </div>
+      <div class="howcard">
+        <h4>How it works</h4>
+        <p>1. Transfer any amount to this account from your bank app.<br>2. Your wallet will be credited once the payment is confirmed.</p>
+      </div>
+    </div>
     <div class="empty" id="fund-loading" style="display:none">Loading your account…</div>
     <div class="err" id="fund-err2"></div>
   </div>
@@ -2363,7 +2379,24 @@ function readFundCache(){
     return c;
   }catch(e){ return null; }
 }
+/* Manual funding account (admin-editable) — read live every time the Fund
+   Wallet view opens, so an admin edit shows at once, never from a stale
+   saved copy. Hidden when the backend has no manual details set. */
+async function loadManualFunding(){
+  const box=$('fund-manual'); if(!box) return;
+  box.style.display='none';
+  try{
+    const j=await api('/api/manual-funding','GET');
+    if(j.ok && j.account_number){
+      $('fund-m-bank').value=j.bank||'';
+      $('fund-m-acct-no').value=j.account_number||'';
+      $('fund-m-acct-name').value=j.account_name||'';
+      box.style.display='block';
+    }
+  }catch(e){}
+}
 async function loadFundView(){
+  loadManualFunding();
   // Instant first, live refresh second — exactly like the dashboard and
   // the data pages: whatever is already saved on this phone shows at
   // once, and the server only replaces it when it answers. Nothing on
