@@ -758,7 +758,7 @@
         <div class="chip" id="tab-9mobile" onclick="pickNet('9mobile')">9mobile</div>
       </div>
     </div>
-    <div class="card"><h4>Select Category</h4><div class="chips" id="plan-cats"></div></div>
+    <div class="card"><h4>Select Plan Type</h4><div class="chips" id="plan-cats"></div></div>
     <div class="card"><h4>Select Plan</h4><div class="plans" id="plan-list"></div></div>
     <div class="card">
       <div class="field"><label>Phone Number</label><input id="data-phone" inputmode="numeric" maxlength="11" placeholder="0803 123 4567"></div>
@@ -1902,16 +1902,15 @@ async function copyRefLink(){
 
 /* ----- data ----- */
 function netKey(){ return curNet==='9mobile' ? 'etisalat' : curNet.toLowerCase(); }
-function planCats(name){
+/* Plan type comes from the plan name itself, like the provider's own
+   dashboard: pick a network, then a type (SME, COOPERATE GIFTING,
+   GIFTING), then the plans under that type with their prices. */
+function planType(name){
   const n=' '+name.toLowerCase().replace(/-/g,' ')+' ';
-  const cats=[];
-  if(/\bsme\b/.test(n)) cats.push('SME');
-  if(/1 ?hour|2 ?hours|1 ?days?\b|daily plan|1 ?night/.test(n)) cats.push('DAILY');
-  if(/7 ?days?|weekly/.test(n)) cats.push('WEEKLY');
-  if(/30 ?days?|monthly/.test(n)) cats.push('MONTHLY');
-  if(/60 ?days?|2 monthly/.test(n)) cats.push('2-MONTHLY');
-  if(!cats.length) cats.push('Others');
-  return cats;
+  if(n.includes('cooperate gifting')) return 'COOPERATE GIFTING';
+  if(/\bgifting\b/.test(n)) return 'GIFTING';
+  if(/\bsme\b/.test(n)) return 'SME';
+  return 'Others';
 }
 function cleanPlanName(name, pre){
   let n=' '+name+' ';
@@ -1923,15 +1922,15 @@ function cleanPlanName(name, pre){
   return n||name;
 }
 function pickNet(n){
-  curNet=n; curPlan=null; curPlanCat=null; plansExpanded=false;
+  curNet=n; curPlan=null; curPlanType=null; plansExpanded=false;
   $('tab-mtn').classList.toggle('on', n==='MTN');
   $('tab-airtel').classList.toggle('on', n==='Airtel');
   $('tab-glo').classList.toggle('on', n==='Glo');
   $('tab-9mobile').classList.toggle('on', n==='9mobile');
   renderPlans();
 }
-let PLAN_CATS = {}, curPlanCat = null, curPlanList = [], plansExpanded = false;
-function pickPlanCat(c){ curPlanCat=c; curPlan=null; plansExpanded=false; renderPlans(); }
+let PLAN_TYPES = {}, curPlanType = null, curPlanList = [], plansExpanded = false;
+function pickPlanType(c){ curPlanType=c; curPlan=null; plansExpanded=false; renderPlans(); }
 function togglePlans(){ plansExpanded=!plansExpanded; renderPlans(); }
 /* Plans cache: prices and categories must appear INSTANTLY when a network
    is tapped. Plans are saved in localStorage on first load, so every later
@@ -1961,10 +1960,10 @@ function plansCacheLoad(){
 function plansCacheSave(){
   try{ localStorage.setItem('sv_plans', JSON.stringify({ts:Date.now(), nets:PLAN_RAW})); }catch(e){}
 }
-function catsFromPlans(plans){
-  const cats={};
-  (plans||[]).forEach(p=>{ planCats(p.name).forEach(c=>{ (cats[c]=cats[c]||[]).push(p); }); });
-  return cats;
+function typesFromPlans(plans){
+  const types={};
+  (plans||[]).forEach(p=>{ const t=planType(p.name); (types[t]=types[t]||[]).push(p); });
+  return types;
 }
 async function fetchNetPlans(net){
   const j = await api('/api/data/plans?network='+net);
@@ -1980,7 +1979,7 @@ async function prefetchOtherNets(){
     try{
       const plans=await fetchNetPlans(n);
       PLAN_RAW[n]=plans; plansCacheSave();
-      PLAN_CATS[disp[n]]=catsFromPlans(plans);
+      PLAN_TYPES[disp[n]]=typesFromPlans(plans);
     }catch(e){}
   }
   prefetching=false;
@@ -1989,19 +1988,19 @@ async function renderPlans(){
   const box=$('plan-list'), catsBox=$('plan-cats');
   const key=netKey(), netAtCall=curNet;
   try{
-    if(!PLAN_CATS[curNet]){
+    if(!PLAN_TYPES[curNet]){
       if(!PLAN_RAW[key]){
         const cached=plansCacheLoad();
         if(cached && cached.nets) PLAN_RAW=cached.nets;
       }
       if(PLAN_RAW[key]){
-        PLAN_CATS[curNet]=catsFromPlans(PLAN_RAW[key]);
-        renderPlansFromCats();
+        PLAN_TYPES[curNet]=typesFromPlans(PLAN_RAW[key]);
+        renderPlansFromTypes();
         fetchNetPlans(key).then(plans=>{
           if(JSON.stringify(plans)!==JSON.stringify(PLAN_RAW[key])){
             PLAN_RAW[key]=plans; plansCacheSave();
-            PLAN_CATS[netAtCall]=catsFromPlans(plans);
-            if(curNet===netAtCall) renderPlansFromCats();
+            PLAN_TYPES[netAtCall]=typesFromPlans(plans);
+            if(curNet===netAtCall) renderPlansFromTypes();
           }
         }).catch(()=>{});
         prefetchOtherNets();
@@ -2010,20 +2009,20 @@ async function renderPlans(){
       box.innerHTML='<div class="empty">Loading plans…</div>'; catsBox.innerHTML='';
       const plans=await fetchNetPlans(key);
       PLAN_RAW[key]=plans; plansCacheSave();
-      PLAN_CATS[curNet]=catsFromPlans(plans);
+      PLAN_TYPES[curNet]=typesFromPlans(plans);
     }
-    renderPlansFromCats();
+    renderPlansFromTypes();
     prefetchOtherNets();
   }catch(e){ box.innerHTML='<div class="empty">'+e.message+'</div>'; }
 }
-function renderPlansFromCats(){
+function renderPlansFromTypes(){
   const box=$('plan-list'), catsBox=$('plan-cats');
-  const cats=PLAN_CATS[curNet];
-  const order=['SME','DAILY','WEEKLY','MONTHLY','2-MONTHLY','Others'].filter(c=>cats[c]&&cats[c].length);
+  const types=PLAN_TYPES[curNet];
+  const order=['SME','COOPERATE GIFTING','GIFTING','Others'].filter(c=>types[c]&&types[c].length);
   if(!order.length){ catsBox.innerHTML=''; box.innerHTML='<div class="empty">No plans right now. Try again later.</div>'; return; }
-  if(!order.includes(curPlanCat)) curPlanCat = order.includes('MONTHLY') ? 'MONTHLY' : order[0];
-  catsBox.innerHTML=order.map(c=>`<div class="chip${c===curPlanCat?' on':''}" onclick="pickPlanCat('${c}')">${c}</div>`).join('');
-  curPlanList=cats[curPlanCat];
+  if(!order.includes(curPlanType)) curPlanType = order[0];
+  catsBox.innerHTML=order.map(c=>`<div class="chip${c===curPlanType?' on':''}" onclick="pickPlanType('${c}')">${c}</div>`).join('');
+  curPlanList=types[curPlanType];
   const shown = plansExpanded ? curPlanList : curPlanList.slice(0,6);
   box.innerHTML = shown.map((p,i)=>
     `<div class="plan${curPlan===i?' on':''}" title="${cleanPlanName(p.name).replace(/"/g,'&quot;')}" onclick="pickPlan(${i})"><b>${cleanPlanName(p.name)}</b><small>${naira(p.price)}</small></div>`).join('')
