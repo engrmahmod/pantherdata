@@ -365,6 +365,10 @@
   .rc-row .v{font-weight:700;text-align:right;word-break:break-all}
   .rc-stpill{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:99px;font-size:.68rem;font-weight:800}
   .rc-thanks-card{background:linear-gradient(120deg,#f1eafe,#ede9fe);border-radius:14px;margin:10px 12px 12px;padding:10px 12px;display:flex;gap:12px;align-items:center;text-align:left}
+  .rc-tokenbox{margin:10px 12px 0;background:#f1eafe;border:1px dashed #8b3dff;border-radius:14px;padding:12px;text-align:center}
+  .rc-token-lab{font-size:.78rem;color:#5b6b8c;margin-bottom:6px}
+  .rc-token-val{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:1.2rem;font-weight:800;color:#1e1b4b;letter-spacing:1px;word-break:break-all}
+  .rc-token-btn{margin-top:10px;border:none;background:#8b3dff;color:#fff;border-radius:999px;padding:9px 22px;font-size:.9rem;cursor:pointer}
   .rc-heart{width:36px;height:36px;border-radius:50%;background:#e9d5ff;display:flex;align-items:center;justify-content:center;flex-shrink:0}
   .rc-heart svg{width:18px;height:18px;display:block}
   .rc-thanks{font-weight:800;font-size:.85rem}
@@ -1192,11 +1196,18 @@ function openReceipt(i){
     row(IC_HASH,'Reference', esc(t.reference))+
     row(IC_OK,'Status', `<span class="rc-stpill" style="background:${stCol}22;color:${stCol}">${stIc} ${stTxt}</span>`)+
     (balAfter!==null ? row(IC_WAL,'Wallet balance after', naira(balAfter)) : '')+
-    `</div><div class="rc-thanks-card"><div class="rc-heart"><svg viewBox="0 0 24 24" fill="#7c3aed"><path d="M12 21s-7.5-4.7-10-9.3C.4 8.6 2.3 5 5.7 5c2 0 3.4 1.1 4.3 2.6C10.9 6.1 12.3 5 14.3 5c3.4 0 5.3 3.6 3.7 6.7C19.5 16.3 12 21 12 21z"/></svg></div><div><div class="rc-thanks">Thank you for using Panther Data</div>`+
+    `</div>`+(t.type==='power'&&t.token?`<div class="rc-tokenbox"><div class="rc-token-lab">Your electricity token \u2014 type this into your meter</div><div class="rc-token-val">${esc(t.token)}</div><button class="rc-token-btn" onclick="copyRcToken(this)">Copy token</button></div>`:'')+`<div class="rc-thanks-card"><div class="rc-heart"><svg viewBox="0 0 24 24" fill="#7c3aed"><path d="M12 21s-7.5-4.7-10-9.3C.4 8.6 2.3 5 5.7 5c2 0 3.4 1.1 4.3 2.6C10.9 6.1 12.3 5 14.3 5c3.4 0 5.3 3.6 3.7 6.7C19.5 16.3 12 21 12 21z"/></svg></div><div><div class="rc-thanks">Thank you for using Panther Data</div>`+
     `<div class="rc-motto">Low Prices. Fast Service.</div></div></div></div>`;
   $('rcptmodal').classList.add('show');
 }
 function closeReceipt(){ $('rcptmodal').classList.remove('show'); }
+function copyRcToken(btn){
+  const v=document.querySelector('.rc-token-val'); if(!v) return;
+  const txt=v.textContent.trim();
+  const done=()=>{ btn.textContent='Copied \u2713'; setTimeout(()=>{ btn.textContent='Copy token'; },2000); };
+  const fb=()=>{ const ta=document.createElement('textarea'); ta.value=txt; document.body.appendChild(ta); ta.select(); try{ document.execCommand('copy'); done(); }catch(_){} ta.remove(); };
+  if(navigator.clipboard) navigator.clipboard.writeText(txt).then(done).catch(fb); else fb();
+}
 function fmtDT(iso){
   try{
     const d=new Date(iso); if(isNaN(d)) return iso;
@@ -1345,6 +1356,7 @@ function drawReceiptPNG(rc){
     if(rc.phone) rows.push([(rc.numLabel||'Phone number'), maskPhone(rc.phone), false, IC_P]);
     rows.push(['Date & time', fmtDT(t.created||t.date), false, IC_C]);
     rows.push(['Reference', t.reference||'\u2014', false, IC_H]);
+    if(t.type==='power' && t.token) rows.push(['Token', t.token, false, IC_H]);
     rows.push(['Status', rc.stTxt, true, IC_O]);
     if(rc.balAfter!==null && rc.balAfter!==undefined) rows.push(['Wallet balance after', naira(rc.balAfter), false, IC_W]);
     const cardY=y, cardX=32, cardW=W-64;
@@ -1464,7 +1476,7 @@ function applyHistView(){
     if(ty!=='all' && (t.type||'')!==ty) return;
     if(f!=='all' && histStatus(t)!==f) return;
     if(q){
-      const hay=((t.description||t.desc||'')+' '+(t.service||'')+' '+String(t.amount||'')).toLowerCase().replace(/\s+/g,'');
+      const hay=((t.description||t.desc||'')+' '+(t.service||'')+' '+String(t.amount||'')+' '+(t.token||'')).toLowerCase().replace(/\s+/g,'');
       if(hay.indexOf(q)===-1) return;
     }
     rows.push(txHTML(t,k));
