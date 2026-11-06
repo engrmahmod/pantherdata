@@ -103,7 +103,7 @@ footer .flinks{margin-bottom:10px}
 <div class="note">The full plan list, including SME, Gifting and Corporate plans for every network, is inside the app after free signup. Prices above are the popular monthly plans; the price you see before you confirm is the price you pay.</div>
 
 <a class="cta" href="/">Create Free Account</a>
-<a class="cta2" href="https://wa.me/2347072082636?text=Hello%20Panther%20Data" target="_blank" rel="noopener">Chat with us on WhatsApp</a>
+<a class="cta2" href="https://wa.me/2349037461659?text=Hello%20Panther%20Data" target="_blank" rel="noopener">Chat with us on WhatsApp</a>
 
 <footer>
 <div class="flinks"><a href="/">Home</a><a href="faq.html">FAQ</a><a href="privacy.html">Privacy Policy</a></div>
@@ -118,6 +118,10 @@ function priceTab(net, el){
   document.querySelectorAll('.price-table').forEach(function(t){t.classList.remove('on')});
   document.getElementById('pt-' + net).classList.add('on');
 }
+</script>
+<script>
+// WhatsApp number follows the admin setting; the link above is the fallback.
+(function(){try{fetch('https://sweetvtu-backend.onrender.com/api/config').then(function(r){return r.json();}).then(function(c){if(c&&c.ok&&c.whatsapp_number){var d=String(c.whatsapp_number).replace(/\D/g,'');if(d.charAt(0)==='0')d='234'+d.slice(1);if(d){document.querySelectorAll('a[href*="wa.me"]').forEach(function(a){a.href='https://wa.me/'+d+'?text=Hello%20Panther%20Data';});}}}).catch(function(){});}catch(e){}})();
 </script>
 </body>
 </html>
