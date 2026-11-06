@@ -79,7 +79,7 @@ footer .flinks{margin-bottom:10px}
 <p>Your account needs only your name, phone number and email. Funding accounts are issued with your name and a reference only — no BVN is required. You can ask for your data to be deleted at any time; see our <a href="privacy.html">Privacy Policy</a> for details.</p></details>
 
 <a class="cta" href="/">Create Free Account</a>
-<a class="cta2" href="https://wa.me/2347072082636?text=Hello%20Panther%20Data" target="_blank" rel="noopener">Chat with us on WhatsApp</a>
+<a class="cta2" href="https://wa.me/2349037461659?text=Hello%20Panther%20Data" target="_blank" rel="noopener">Chat with us on WhatsApp</a>
 
 <footer>
 <div class="flinks"><a href="/">Home</a><a href="prices.html">Prices</a><a href="privacy.html">Privacy Policy</a></div>
@@ -87,5 +87,9 @@ footer .flinks{margin-bottom:10px}
 <div>Developed by Engr Mahmod · © 2026 Panther Data</div>
 </footer>
 </div>
+<script>
+// WhatsApp number follows the admin setting; the link above is the fallback.
+(function(){try{fetch('https://sweetvtu-backend.onrender.com/api/config').then(function(r){return r.json();}).then(function(c){if(c&&c.ok&&c.whatsapp_number){var d=String(c.whatsapp_number).replace(/\D/g,'');if(d.charAt(0)==='0')d='234'+d.slice(1);if(d){document.querySelectorAll('a[href*="wa.me"]').forEach(function(a){a.href='https://wa.me/'+d+'?text=Hello%20Panther%20Data';});}}}).catch(function(){});}catch(e){}})();
+</script>
 </body>
 </html>
